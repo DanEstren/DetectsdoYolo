@@ -26,7 +26,7 @@ while cap.isOpened():
         break
     framecount += 1
     frame = cv2.resize(frame, (width, height))
-    result = model(frame,conf=0.4)[0]
+    result = model(frame,conf=0.4)[0] #classes=19 exemplo para vaca, consultar o coco.yaml
     detections = sv.Detections.from_ultralytics(result)
     #detections = tracker.update_with_detections(detections) #isso tmb remover se necessário
     annotated_frame = box_annotator.annotate(scene=frame, detections=detections)
