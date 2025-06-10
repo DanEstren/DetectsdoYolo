@@ -22,7 +22,8 @@ height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 fps = int(cap.get(cv2.CAP_PROP_FPS))
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 out = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
-
+total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+frame_count = 0
 # Initialize JSON data structure and set output file
 output_json = []
 output_file = "detected_products.json"
@@ -43,6 +44,7 @@ while cap.isOpened():
     if not ret:
         break
     
+    frame_count += 1
     # Perform detection
     result = model(frame, conf=0.6)[0]
     detections = sv.Detections.from_ultralytics(result)
@@ -57,12 +59,7 @@ while cap.isOpened():
     labels = [
         f"{model.names[class_id] if hasattr(model, 'names') else f'Class_{class_id}'} (ID: {tracker_id})"
         for class_id, tracker_id in zip(detections.class_id, detections.tracker_id)
-    ]
-    
-    # Update frame counts for detected tracker IDs
-    current_tracker_ids = set(detections.tracker_id)
-    for tracker_id in current_tracker_ids:
-        tracker_frame_counts[tracker_id] = tracker_frame_counts.get(tracker_id, 0) + 1
+    ] 
     
     # Process each detection for JSON saving
     for det in zip(detections.xyxy, detections.class_id, detections.tracker_id, detections.confidence):
@@ -72,13 +69,19 @@ while cap.isOpened():
         center_point = (int(x_center), int(y_center))
 
         cv2.circle(frame, center=center_point, radius=5, color=(0, 0, 255), thickness=-1)
+        if cv2.pointPolygonTest(counting_area, center_point, False) > 0:
+            # Update frame counts for detected tracker IDs
+            current_tracker_ids = set(detections.tracker_id)
+            for tracker_id in current_tracker_ids:
+                tracker_frame_counts[tracker_id] = tracker_frame_counts.get(tracker_id, 0) + 1
+
 
         class_name = model.names[class_id] if hasattr(model, 'names') else f"Class_{class_id}"
         
         # Check if detection is in both counting areas and has been detected for more than 2 frames
         if (cv2.pointPolygonTest(counting_area, center_point, False) > 0 and 
             cv2.pointPolygonTest(counting_area2, center_point, False) > 0 and
-            tracker_frame_counts.get(tracker_id, 0) > 4):
+            tracker_frame_counts.get(tracker_id, 0) > 2):
             if tracker_id not in unique_product_ids:
                 unique_product_ids.add(tracker_id)
                 detection_data = {
@@ -112,17 +115,15 @@ while cap.isOpened():
         2  # Thickness
     )
     # Write frame to output video
-    out.write(annotated_frame)
+    #out.write(annotated_frame)
+    print(f"Frame Atual {frame_count} de // {total_frames}")
     exibir = annotated_frame.copy()
     # Calcula e exibe FPS
     end_time = time.time()
     fps_display = round(1 / (end_time - start_time), 2)
     cv2.putText(exibir, f"FPS: {fps_display}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    
     # Show annotated frame
     cv2.imshow("janela", exibir)
-    
-    
     # Break loop if 'q' is pressed
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
