@@ -2,103 +2,111 @@ import cv2
 import numpy as np
 
 # === CONFIGURAÇÕES ===
+# Coloque sua URL aqui
 RTSP_URL = 0
-LARGURA_DA_JANELA = 1024 # Tamanho confortável para ver no monitor
 
-# Variáveis globais
-pontos_reais = [] # Salva as coordenadas da imagem ORIGINAL (Gigante)
-pontos_visual = [] # Salva as coordenadas da telinha (só pra desenhar)
+# depois usar assim
+
+# roi_points = np.array([(270, 6), (289, 1075), (1675, 1074), (1566, 7)], np.int32)
+
+# x_corte, y_corte, w_corte, h_corte = cv2.boundingRect(roi_points)
+
+# latest_frame = frame[y_corte : y_corte + h_corte, x_corte : x_corte + w_corte], pasar o frame para ser isso, que ele vai saber o dimensionamento correto
+
+# TAMANHO QUE VOCÊ QUER VER NA TELA (Display)
+LARGURA_DISPLAY = 1280
+ALTURA_DISPLAY = 720
+
+# Variáveis globais para guardar os pontos
+pontos_reais = []   # Coordenadas da Câmera Original
+pontos_visuais = [] # Coordenadas da Telinha (1280x720)
 
 def mouse_callback(event, x, y, flags, param):
-    global pontos_reais, pontos_visual
-    
-    # Param contém as proporções (scale_x, scale_y) que passamos na criação do callback
-    scale_w, scale_h = param
+    """
+    Função que processa o clique.
+    'param' traz as escalas (scale_x, scale_y)
+    """
+    global pontos_reais, pontos_visuais
+    scale_x, scale_y = param
 
     if event == cv2.EVENT_LBUTTONDOWN:
-        # 1. Pega o clique na tela pequena (x, y)
-        pontos_visual.append((x, y))
+        # 1. Guarda o ponto onde você clicou (Visual)
+        pontos_visuais.append((x, y))
         
-        # 2. Converte para a coordenada REAL (Regra de 3)
-        x_real = int(x * scale_w)
-        y_real = int(y * scale_h)
+        # 2. Calcula onde é esse ponto na imagem REAL
+        x_real = int(x * scale_x)
+        y_real = int(y * scale_y)
         pontos_reais.append((x_real, y_real))
         
-        print(f"✅ Clique Tela: ({x}, {y}) -> 🌍 Real: ({x_real}, {y_real})")
-        print(f"📋 Lista para copiar: {pontos_reais}\n")
+        print(f"🖱️ Clique: ({x}, {y}) --> 🎯 Real: ({x_real}, {y_real})")
 
     elif event == cv2.EVENT_RBUTTONDOWN:
         pontos_reais = []
-        pontos_visual = []
+        pontos_visuais = []
         print("🗑️ Pontos limpos!")
 
 def main():
+    print("Conectando na câmera...")
     cap = cv2.VideoCapture(RTSP_URL)
     
     if not cap.isOpened():
-        print("Erro ao abrir câmera!")
+        print("❌ Erro ao abrir câmera!")
         return
 
-    # 1. Descobre o tamanho REAL da imagem da câmera
-    # Geralmente é 1920x1080 ou 1280x720
+    # 1. Pega a resolução REAL da câmera (sem chutar)
     w_original = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h_original = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
-    print(f"📏 Resolução Original da Câmera: {w_original}x{h_original}")
+    print(f"📏 Câmera Original: {w_original}x{h_original}")
+    print(f"🖥️  Sua Tela de Desenho: {LARGURA_DISPLAY}x{ALTURA_DISPLAY}")
 
-    # 2. Calcula o tamanho da JANELA (Mantendo a proporção correta)
-    # Se a largura for 1024, qual deve ser a altura para não esticar?
-    fator_proporcao = LARGURA_DA_JANELA / w_original
-    w_tela = LARGURA_DA_JANELA
-    h_tela = int(h_original * fator_proporcao)
-    
-    print(f"🖥️  Resolução da Janela Visual: {w_tela}x{h_tela}")
-    print(f"➗ Fator de Escala: {1/fator_proporcao:.2f}x")
+    # 2. Calcula o Fator de Escala (Quantas vezes a original é maior que a tela)
+    # Se a câmera for 1920 e a tela 1280, o fator é 1.5
+    scale_x = w_original / LARGURA_DISPLAY
+    scale_y = h_original / ALTURA_DISPLAY
 
-    # 3. Calcula os multiplicadores para corrigir o clique
-    scale_w = w_original / w_tela
-    scale_h = h_original / h_tela
+    print(f"➗ Fatores de Conversão: X={scale_x:.2f}, Y={scale_y:.2f}")
 
-    window_name = "Seletor de ROI Inteligente"
+    # Configura Janela e Mouse
+    window_name = "Definir ROI (Redimensionado)"
     cv2.namedWindow(window_name)
-    # Passamos os fatores de escala para a função do mouse saber calcular
-    cv2.setMouseCallback(window_name, mouse_callback, param=(scale_w, scale_h))
+    cv2.setMouseCallback(window_name, mouse_callback, param=(scale_x, scale_y))
 
-    print("\n--- INSTRUÇÕES ---")
-    print("🖱️  Botão ESQUERDO: Marcar ponto")
-    print("🖱️  Botão DIREITO:  Resetar")
-    print("⌨️  'Q': Sair")
-    
+    print("\n--- COMANDOS ---")
+    print("🖱️  Botão ESQUERDO: Marcar")
+    print("🖱️  Botão DIREITO:  Limpar")
+    print("⌨️  'Q': Sair e Pegar Código")
+
     while True:
         ret, frame = cap.read()
         if not ret:
-            print("Tentando reconectar...")
+            print("Reconectando...")
             continue
 
-        # Redimensiona apenas para VISUALIZAÇÃO
-        frame_visual = cv2.resize(frame, (w_tela, h_tela))
+        # 3. FORÇA O RESIZE PARA O TAMANHO QUE VOCÊ ESCOLHEU
+        frame_display = cv2.resize(frame, (LARGURA_DISPLAY, ALTURA_DISPLAY))
 
-        # Desenha os pontos (usando as coordenadas da tela pequena)
-        if len(pontos_visual) > 0:
-            # Desenha bolinhas
-            for p in pontos_visual:
-                cv2.circle(frame_visual, p, 5, (0, 0, 255), -1)
+        # Desenha os pontos (usando as coordenadas visuais)
+        if len(pontos_visuais) > 0:
+            for p in pontos_visuais:
+                cv2.circle(frame_display, p, 5, (0, 0, 255), -1)
             
-            # Desenha linhas
-            if len(pontos_visual) > 1:
-                pts = np.array(pontos_visual, np.int32).reshape((-1, 1, 2))
-                cv2.polylines(frame_visual, [pts], isClosed=False, color=(0, 255, 0), thickness=2)
+            if len(pontos_visuais) > 1:
+                pts = np.array(pontos_visuais, np.int32).reshape((-1, 1, 2))
+                # isClosed=True fecha o retângulo automaticamente
+                fechar = True if len(pontos_visuais) >= 3 else False
+                cv2.polylines(frame_display, [pts], isClosed=fechar, color=(0, 255, 0), thickness=2)
 
-        cv2.imshow(window_name, frame_visual)
+        cv2.imshow(window_name, frame_display)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    # Ao sair, imprime o código pronto para você
-    print("\n" + "="*40)
-    print("🚀 COPIE E COLE ISSO NO SEU CÓDIGO:")
+    # RESULTADO FINAL
+    print("\n" + "="*50)
+    print("✅ PRONTO! Use esta linha no seu código principal:")
     print(f"roi_points = np.array({pontos_reais}, np.int32)")
-    print("="*40)
+    print("="*50)
 
     cap.release()
     cv2.destroyAllWindows()
