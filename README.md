@@ -16,7 +16,7 @@ deactivate
 
 e para instalar algumas das dependencias 
 ```bash
-pip install ultralytics roboflow opencv-python torch numpy yt-dlp
+pip install ultralytics supervision opencv-python 
 ```
 Utiliza alguns outros repositórios como 
 ## 💻 Python
